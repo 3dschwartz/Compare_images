@@ -7,6 +7,7 @@
 <style>
   :root {
     --bg: #2a2a2c;
+    --stagebg: #1d1d1f;
     --panel: #343437;
     --line: #4a4a4f;
     --text: #ececea;
@@ -23,14 +24,17 @@
     font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
   header {
-    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;
     padding: 10px 16px;
     background: var(--panel);
     border-bottom: 1px solid var(--line);
   }
   h1 { font-size: 16px; font-weight: 600; margin: 0 8px 0 0; }
+  .group { display: flex; align-items: center; gap: 6px; }
+  .sep { width: 1px; align-self: stretch; background: var(--line); }
   button, label.btn {
     font: inherit; color: var(--text);
     background: transparent;
@@ -40,13 +44,16 @@
     cursor: pointer;
   }
   button:hover, label.btn:hover { border-color: var(--muted); }
+  button:disabled { opacity: .4; cursor: default; }
+  button:disabled:hover { border-color: var(--line); }
   button:focus-visible, label.btn:focus-within, .thumb:focus-visible, #stage:focus-visible {
     outline: 2px solid var(--accent); outline-offset: 2px;
   }
   button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
   .ctl { display: flex; align-items: center; gap: 8px; color: var(--muted); }
-  .ctl input[type=range] { accent-color: var(--accent); width: 120px; }
-  .hint { margin-left: auto; color: var(--muted); font-size: 13px; }
+  .ctl input[type=range] { accent-color: var(--accent); width: 110px; }
+  #zoomVal { min-width: 56px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .hint { width: 100%; color: var(--muted); font-size: 13px; }
 
   #warnings { display: none; }
   #warnings.show { display: block; }
@@ -55,36 +62,40 @@
     background: #4a2e26; color: #ffd2c4;
     border-bottom: 1px solid #6b3f33;
   }
-  .warn + .warn { border-top: 0; }
 
   main { flex: 1; min-height: 0; display: flex; position: relative; }
-  #stageWrap {
-    flex: 1; min-width: 0;
-    display: flex; align-items: center; justify-content: center;
-    padding: 16px;
-  }
+  #stageWrap { flex: 1; min-width: 0; position: relative; }
   #stage {
-    position: relative;
-    background: #000;
-    box-shadow: 0 0 0 1px var(--line);
-    cursor: pointer;
+    position: absolute; inset: 0;
+    overflow: hidden;
+    background: var(--stagebg);
+    cursor: grab;
+    touch-action: none;
     user-select: none;
   }
-  #stage img {
-    position: absolute; inset: 0;
+  #stage.drag { cursor: grabbing; }
+  #layer {
+    position: absolute; left: 0; top: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  #layer img {
+    position: absolute; left: 0; top: 0;
     width: 100%; height: 100%;
-    object-fit: fill;
     visibility: hidden;
     pointer-events: none;
     -webkit-user-drag: none;
   }
-  #stage img.on { visibility: visible; }
+  #layer img.on { visibility: visible; }
+  #layer.pixel img { image-rendering: pixelated; }
+
   #badge {
-    position: absolute; left: 8px; top: 8px;
-    background: rgba(0,0,0,.7); color: var(--text);
-    padding: 2px 10px; border-radius: 4px; font-size: 13px;
+    position: absolute; left: 12px; top: 12px;
+    background: rgba(0,0,0,.72); color: var(--text);
+    padding: 3px 10px; border-radius: 4px; font-size: 13px;
     pointer-events: none;
-    max-width: calc(100% - 16px);
+    max-width: calc(100% - 24px);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
 
@@ -99,7 +110,7 @@
   #empty strong { color: var(--text); font-size: 20px; font-weight: 600; }
 
   aside {
-    width: 220px; flex: none;
+    width: 230px; flex: none;
     background: var(--panel);
     border-left: 1px solid var(--line);
     overflow-y: auto;
@@ -109,28 +120,31 @@
   .thumb {
     position: relative;
     display: block; width: 100%;
-    text-align: left;
     padding: 6px;
     border: 1px solid var(--line);
     border-radius: 6px;
     background: var(--bg);
   }
-  .thumb.active { border-color: var(--accent); }
-  .thumb img {
+  .thumb.shown { border-color: var(--accent); }
+  .thumb.off img.pv { opacity: .35; }
+  .thumb img.pv {
     display: block; width: 100%; height: 90px;
     object-fit: contain; background: #000; border-radius: 3px;
   }
   .thumb .name { margin-top: 6px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .thumb .meta { font-size: 12px; color: var(--muted); }
   .thumb .meta.bad { color: var(--warn); }
-  .thumb .key {
+  .thumb .tag { font-size: 12px; color: var(--accent); }
+  .thumb .eye {
     position: absolute; top: 10px; left: 10px;
-    background: rgba(0,0,0,.7); border-radius: 3px; padding: 0 6px; font-size: 12px;
+    min-width: 34px; height: 24px; padding: 0 6px; font-size: 12px;
+    background: rgba(0,0,0,.72); border-radius: 4px;
   }
+  .thumb.off .eye { color: var(--muted); text-decoration: line-through; }
   .thumb .rm {
     position: absolute; top: 10px; right: 10px;
     width: 24px; height: 24px; padding: 0; line-height: 1;
-    background: rgba(0,0,0,.7); border-radius: 4px;
+    background: rgba(0,0,0,.72); border-radius: 4px;
   }
 
   #dropOverlay {
@@ -145,9 +159,8 @@
 
   @media (max-width: 700px) {
     main { flex-direction: column; }
-    aside { width: auto; flex-direction: row; border-left: 0; border-top: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; }
+    aside { width: auto; max-height: 190px; flex-direction: row; border-left: 0; border-top: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; }
     .thumb { width: 150px; flex: none; }
-    .hint { display: none; }
   }
 </style>
 </head>
@@ -158,24 +171,42 @@
   <label class="btn">Bilder wählen
     <input id="file" type="file" accept="image/jpeg,image/webp,.jpg,.jpeg,.webp" multiple hidden>
   </label>
-  <button id="auto" type="button" aria-pressed="false">Auto-Wechsel</button>
-  <label class="ctl">Intervall
-    <input id="interval" type="range" min="100" max="2000" step="50" value="500">
-    <span id="intervalVal">500 ms</span>
-  </label>
   <button id="clear" type="button">Alle entfernen</button>
-  <span class="hint">Leertaste / Klick = weiter · ← → = wechseln · 1–9 = Bild · F = Auto</span>
+  <span class="sep"></span>
+
+  <span class="group">
+    <button id="toggleTop" type="button" disabled>Oberes Bild ausblenden</button>
+    <button id="auto" type="button" aria-pressed="false" disabled>Auto-Wechsel</button>
+    <label class="ctl">
+      <input id="interval" type="range" min="100" max="2000" step="50" value="500" aria-label="Intervall">
+      <span id="intervalVal">500 ms</span>
+    </label>
+  </span>
+  <span class="sep"></span>
+
+  <span class="group">
+    <button id="zoomOut" type="button" aria-label="Verkleinern">−</button>
+    <span id="zoomVal">100 %</span>
+    <button id="zoomIn" type="button" aria-label="Vergrößern">+</button>
+    <button id="fit" type="button">Einpassen</button>
+    <button id="actual" type="button">100 %</button>
+  </span>
+
+  <span class="hint">Leertaste oder Klick = oberes Bild ein/aus · Mausrad = Zoom · Ziehen = Verschieben · Doppelklick = Einpassen · 1–9 = einzelnes Bild ein/aus · F = Auto-Wechsel</span>
 </header>
 
 <div id="warnings" role="alert"></div>
 
 <main>
   <div id="stageWrap">
-    <div id="stage" tabindex="0" hidden aria-label="Bildvergleich. Klick oder Leertaste wechselt zum nächsten Bild."></div>
+    <div id="stage" tabindex="0" hidden aria-label="Bildvergleich">
+      <div id="layer"></div>
+      <div id="badge"></div>
+    </div>
     <div id="empty">
       <strong>Mindestens zwei Bilder hierher ziehen</strong>
       <span>JPG oder WebP, ähnliches Seitenverhältnis (Abweichung höchstens 2 Pixel)</span>
-      <span>Das größte Bild bestimmt die Anzeigegröße.</span>
+      <span>Das größte Bild bestimmt die Anzeigegröße. Das zuletzt geladene Bild liegt oben.</span>
     </div>
   </div>
   <aside id="list" aria-label="Geladene Bilder"></aside>
@@ -187,27 +218,32 @@
 (() => {
   'use strict';
 
-  const TOLERANCE_PX = 2;                       // erlaubte Abweichung in Pixeln
+  const TOLERANCE_PX = 2;                        // erlaubte Abweichung in Pixeln
   const ALLOWED = ['image/jpeg', 'image/webp'];
   const ALLOWED_EXT = /\.(jpe?g|webp)$/i;
+  const MAX_ZOOM = 32;                           // Bildschirmpixel pro Bildpixel
+  const PIXEL_ZOOM = 3;                          // ab hier ohne Glättung zeichnen
 
   const $ = (id) => document.getElementById(id);
-  const stage = $('stage'), empty = $('empty'), list = $('list');
-  const warningsEl = $('warnings'), overlay = $('dropOverlay');
-  const autoBtn = $('auto'), intervalEl = $('interval'), intervalVal = $('intervalVal');
+  const stage = $('stage'), layer = $('layer'), badge = $('badge'), empty = $('empty');
+  const list = $('list'), warningsEl = $('warnings'), overlay = $('dropOverlay');
+  const autoBtn = $('auto'), toggleBtn = $('toggleTop');
+  const intervalEl = $('interval'), intervalVal = $('intervalVal'), zoomVal = $('zoomVal');
 
-  /** @type {{id:number,name:string,url:string,w:number,h:number,img:HTMLImageElement}[]} */
-  let items = [];
-  let current = 0;
+  /** Reihenfolge = Stapel: letztes Element liegt oben. */
+  let items = [];   // {id,name,url,w,h,active,el}
   let nextId = 1;
+  let notices = [];
+  let ref = null;   // Referenzbild (größtes)
   let timer = null;
-  let notices = [];   // Hinweise zu abgelehnten Dateien
+
+  // Ansicht
+  let s = 1, tx = 0, ty = 0;
+  let fitted = true;
 
   /* ---------- Laden ---------- */
 
-  function isAllowed(file) {
-    return ALLOWED.includes(file.type) || ALLOWED_EXT.test(file.name);
-  }
+  const isAllowed = (f) => ALLOWED.includes(f.type) || ALLOWED_EXT.test(f.name);
 
   function loadImage(file) {
     return new Promise((resolve, reject) => {
@@ -215,7 +251,7 @@
       const img = new Image();
       img.onload = () => resolve({
         id: nextId++, name: file.name, url,
-        w: img.naturalWidth, h: img.naturalHeight, img
+        w: img.naturalWidth, h: img.naturalHeight, active: true, el: null
       });
       img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(file.name)); };
       img.src = url;
@@ -235,7 +271,7 @@
       if (r.status === 'fulfilled') items.push(r.value);
       else notices.push(`„${valid[i].name}“ konnte nicht geladen werden.`);
     });
-    render();
+    rebuild();
   }
 
   function removeItem(id) {
@@ -243,143 +279,274 @@
     if (i < 0) return;
     URL.revokeObjectURL(items[i].url);
     items.splice(i, 1);
-    if (current >= items.length) current = Math.max(0, items.length - 1);
     notices = [];
-    render();
+    if (items.length && !items.some((it) => it.active)) items[items.length - 1].active = true;
+    rebuild();
   }
 
   function clearAll() {
     items.forEach((it) => URL.revokeObjectURL(it.url));
-    items = []; current = 0; notices = [];
-    render();
+    items = []; notices = [];
+    rebuild();
   }
 
   /* ---------- Analyse ---------- */
 
-  function reference() {
-    // Größtes Bild = maßgeblich (nach Pixelfläche, bei Gleichstand das erste)
-    return items.reduce((best, it) => (!best || it.w * it.h > best.w * best.h ? it : best), null);
+  const reference = () =>
+    items.reduce((best, it) => (!best || it.w * it.h > best.w * best.h ? it : best), null);
+
+  // Bild auf Referenzgröße skaliert: Abweichung in Pixeln in der jeweils anderen Achse.
+  function deviationPx(it, r) {
+    const scaledH = r.w * it.h / it.w;
+    const scaledW = r.h * it.w / it.h;
+    return Math.max(Math.abs(scaledH - r.h), Math.abs(scaledW - r.w));
   }
 
-  // Skaliert das Bild auf die Breite der Referenz und misst, wie viele Pixel
-  // die Höhe von der Referenz abweicht (und umgekehrt, je nachdem was größer ist).
-  function deviationPx(it, ref) {
-    const scaledH = ref.w * it.h / it.w;
-    const scaledW = ref.h * it.w / it.h;
-    return Math.max(Math.abs(scaledH - ref.h), Math.abs(scaledW - ref.w));
+  /* ---------- Anzeige-Logik ---------- */
+
+  // Angezeigt wird das oberste aktive Bild im Stapel.
+  const shownIndex = () => {
+    for (let i = items.length - 1; i >= 0; i--) if (items[i].active) return i;
+    return -1;
+  };
+
+  function toggleItem(i) {
+    const it = items[i];
+    if (!it) return;
+    if (it.active && items.filter((x) => x.active).length === 1) return; // eins bleibt immer an
+    it.active = !it.active;
+    updateDisplay();
   }
 
-  /* ---------- Rendering ---------- */
+  function toggleTop() {
+    if (items.length < 2) return;
+    toggleItem(items.length - 1);
+  }
 
-  function render() {
+  function updateDisplay() {
+    const shown = shownIndex();
+    items.forEach((it, i) => it.el && it.el.classList.toggle('on', i === shown));
+
+    [...list.children].forEach((node, i) => {
+      const it = items[i];
+      if (!it) return;
+      node.classList.toggle('shown', i === shown);
+      node.classList.toggle('off', !it.active);
+      const eye = node.querySelector('.eye');
+      eye.textContent = i < 9 ? `${i + 1}` : '•';
+      eye.setAttribute('aria-pressed', String(it.active));
+      eye.title = it.active ? 'Bild ausblenden' : 'Bild einblenden';
+      node.querySelector('.tag').textContent =
+        i === shown ? 'wird angezeigt' : it.active ? 'aktiv, verdeckt' : 'ausgeblendet';
+    });
+
+    const topIt = items[items.length - 1];
+    toggleBtn.disabled = items.length < 2;
+    autoBtn.disabled = items.length < 2;
+    toggleBtn.textContent = topIt && topIt.active ? 'Oberes Bild ausblenden' : 'Oberes Bild einblenden';
+
+    badge.textContent = shown >= 0 ? `${items[shown].name} (${shown + 1}/${items.length})` : '';
+    if (items.length < 2) stopAuto();
+  }
+
+  /* ---------- Aufbau ---------- */
+
+  function rebuild() {
+    ref = reference();
     const hasItems = items.length > 0;
-    empty.hidden = hasItems;
     stage.hidden = !hasItems;
     empty.style.display = hasItems ? 'none' : '';
 
-    const ref = reference();
-    const msgs = [...notices.map((t) => ({ t }))];
-    if (items.length === 1) msgs.push({ t: 'Für einen Vergleich wird mindestens ein weiteres Bild benötigt.' });
-
+    // Hinweise
+    const msgs = [...notices];
+    if (items.length === 1) msgs.push('Für einen Vergleich wird mindestens ein weiteres Bild benötigt.');
     const dev = new Map();
     if (ref) {
       for (const it of items) {
         const d = deviationPx(it, ref);
         dev.set(it.id, d);
         if (it !== ref && d > TOLERANCE_PX) {
-          msgs.push({ t: `„${it.name}“ hat ein anderes Seitenverhältnis als „${ref.name}“ (Abweichung ca. ${d.toFixed(1)} px bei Referenzgröße). Der Vergleich ist nicht aussagekräftig.` });
+          msgs.push(`„${it.name}“ hat ein anderes Seitenverhältnis als „${ref.name}“ (Abweichung ca. ${d.toFixed(1)} px bei Referenzgröße). Der Vergleich ist nicht aussagekräftig.`);
         }
       }
     }
     warningsEl.className = msgs.length ? 'show' : '';
-    warningsEl.innerHTML = '';
-    msgs.forEach((m) => {
+    warningsEl.replaceChildren(...msgs.map((t) => {
       const p = document.createElement('p');
-      p.className = 'warn';
-      p.textContent = m.t;
-      warningsEl.appendChild(p);
-    });
+      p.className = 'warn'; p.textContent = t; return p;
+    }));
 
-    // Bühne: alle Bilder übereinander, sichtbar ist nur eins
-    stage.querySelectorAll('img').forEach((n) => n.remove());
+    // Ebene mit Bildern in Referenzgröße
+    layer.replaceChildren();
     if (ref) {
-      stage.dataset.w = ref.w; stage.dataset.h = ref.h;
-      items.forEach((it, i) => {
+      layer.style.width = ref.w + 'px';
+      layer.style.height = ref.h + 'px';
+      items.forEach((it) => {
         const img = document.createElement('img');
         img.src = it.url; img.alt = it.name; img.draggable = false;
-        if (i === current) img.classList.add('on');
-        stage.appendChild(img);
+        layer.appendChild(img);
+        it.el = img;
       });
-      let badge = $('badge');
-      if (!badge) { badge = document.createElement('div'); badge.id = 'badge'; }
-      stage.appendChild(badge);
-      fitStage();
     }
 
     // Seitenleiste
-    list.innerHTML = '';
+    list.replaceChildren();
     items.forEach((it, i) => {
-      const b = document.createElement('div');
-      b.className = 'thumb' + (i === current ? ' active' : '');
-      b.tabIndex = 0;
-      b.setAttribute('role', 'button');
-      const d = dev.get(it.id) ?? 0;
-      const bad = it !== ref && d > TOLERANCE_PX;
-      b.innerHTML = `
-        <img alt="">
-        <span class="key"></span>
+      const bad = it !== ref && (dev.get(it.id) ?? 0) > TOLERANCE_PX;
+      const node = document.createElement('div');
+      node.className = 'thumb';
+      node.innerHTML = `
+        <img class="pv" alt="">
+        <button class="eye" type="button"></button>
         <button class="rm" type="button" aria-label="Entfernen">×</button>
         <div class="name"></div>
-        <div class="meta${bad ? ' bad' : ''}"></div>`;
-      b.querySelector('img').src = it.url;
-      b.querySelector('.key').textContent = i < 9 ? String(i + 1) : '';
-      b.querySelector('.name').textContent = it.name;
-      b.querySelector('.meta').textContent =
-        `${it.w} × ${it.h}` + (it === ref ? ' · Referenz' : bad ? ' · Seitenverhältnis weicht ab' : '');
-      b.addEventListener('click', () => show(i));
-      b.addEventListener('keydown', (e) => {
-        if (e.target === b && (e.key === 'Enter')) show(i);
-      });
-      b.querySelector('.rm').addEventListener('click', (e) => { e.stopPropagation(); removeItem(it.id); });
-      list.appendChild(b);
+        <div class="meta${bad ? ' bad' : ''}"></div>
+        <div class="tag"></div>`;
+      node.querySelector('.pv').src = it.url;
+      node.querySelector('.name').textContent = it.name;
+      node.querySelector('.meta').textContent =
+        `${it.w} × ${it.h}` + (it === ref ? ' · Referenz' : bad ? ' · Seitenverhältnis weicht ab' : '') +
+        (i === items.length - 1 && items.length > 1 ? ' · oben' : '');
+      node.querySelector('.eye').addEventListener('click', () => toggleItem(i));
+      node.querySelector('.rm').addEventListener('click', () => removeItem(it.id));
+      list.appendChild(node);
     });
 
-    updateBadge();
-    if (items.length < 2) stopAuto();
+    updateDisplay();
+    if (ref) { if (fitted) fitView(); else applyView(); }
   }
 
-  function fitStage() {
-    const w = +stage.dataset.w, h = +stage.dataset.h;
-    if (!w || !h) return;
-    const wrap = $('stageWrap');
-    const availW = wrap.clientWidth - 32;
-    const availH = wrap.clientHeight - 32;
-    const scale = Math.min(availW / w, availH / h);   // darf auch hochskalieren
-    stage.style.width = Math.max(1, Math.floor(w * scale)) + 'px';
-    stage.style.height = Math.max(1, Math.floor(h * scale)) + 'px';
+  /* ---------- Zoom & Verschieben ---------- */
+
+  const viewport = () => ({ w: stage.clientWidth, h: stage.clientHeight });
+
+  function fitScale() {
+    if (!ref) return 1;
+    const v = viewport();
+    return Math.min((v.w - 24) / ref.w, (v.h - 24) / ref.h);
   }
 
-  function updateBadge() {
-    const badge = $('badge');
-    if (!badge || !items[current]) return;
-    badge.textContent = `${current + 1}/${items.length} · ${items[current].name}`;
+  function fitView() {
+    if (!ref) return;
+    const v = viewport();
+    s = fitScale();
+    tx = (v.w - ref.w * s) / 2;
+    ty = (v.h - ref.h * s) / 2;
+    fitted = true;
+    applyView();
   }
 
-  function show(i) {
-    if (!items.length) return;
-    current = (i + items.length) % items.length;
-    const imgs = stage.querySelectorAll('img');
-    imgs.forEach((n, k) => n.classList.toggle('on', k === current));
-    [...list.children].forEach((n, k) => n.classList.toggle('active', k === current));
-    updateBadge();
+  function clampView() {
+    if (!ref) return;
+    const v = viewport();
+    const cw = ref.w * s, ch = ref.h * s;
+    const margin = 60; // mindestens so viel vom Bild bleibt sichtbar
+    tx = Math.min(v.w - margin, Math.max(margin - cw, tx));
+    ty = Math.min(v.h - margin, Math.max(margin - ch, ty));
   }
+
+  function applyView() {
+    clampView();
+    layer.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+    layer.classList.toggle('pixel', s >= PIXEL_ZOOM);
+    zoomVal.textContent = Math.round(s * 100) + ' %';
+  }
+
+  function zoomAt(cx, cy, newS) {
+    const minS = fitScale() * 0.5;
+    newS = Math.min(MAX_ZOOM, Math.max(minS, newS));
+    tx = cx - (cx - tx) * newS / s;
+    ty = cy - (cy - ty) * newS / s;
+    s = newS;
+    fitted = false;
+    applyView();
+  }
+
+  function zoomCenter(factor) {
+    const v = viewport();
+    zoomAt(v.w / 2, v.h / 2, s * factor);
+  }
+
+  function actualSize() {
+    const v = viewport();
+    zoomAt(v.w / 2, v.h / 2, 1);
+  }
+
+  const stagePoint = (e) => {
+    const r = stage.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+
+  stage.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const p = stagePoint(e);
+    const unit = e.deltaMode === 1 ? 16 : 1;
+    zoomAt(p.x, p.y, s * Math.exp(-e.deltaY * unit * 0.0015));
+  }, { passive: false });
+
+  // Zeiger: ein Finger/Maus = verschieben, zwei Finger = Pinch-Zoom
+  const pointers = new Map();
+  let moved = 0, pinchDist = 0, wasMulti = false;
+
+  stage.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    stage.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, stagePoint(e));
+    if (pointers.size === 1) { moved = 0; wasMulti = false; }
+    if (pointers.size === 2) {
+      wasMulti = true;
+      const [a, b] = [...pointers.values()];
+      pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+    }
+    stage.classList.add('drag');
+  });
+
+  stage.addEventListener('pointermove', (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    const prev = pointers.get(e.pointerId);
+    const cur = stagePoint(e);
+    pointers.set(e.pointerId, cur);
+
+    if (pointers.size === 1) {
+      const dx = cur.x - prev.x, dy = cur.y - prev.y;
+      moved += Math.abs(dx) + Math.abs(dy);
+      if (moved > 4) { tx += dx; ty += dy; fitted = false; applyView(); }
+    } else if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinchDist > 0) zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, s * dist / pinchDist);
+      pinchDist = dist;
+    }
+  });
+
+  function endPointer(e) {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.delete(e.pointerId);
+    if (pointers.size === 0) {
+      stage.classList.remove('drag');
+      // Klick ohne Verschieben = oberes Bild ein/aus
+      if (e.type === 'pointerup' && moved <= 4 && !wasMulti) { stopAuto(); toggleTop(); }
+    }
+    pinchDist = 0;
+  }
+  stage.addEventListener('pointerup', endPointer);
+  stage.addEventListener('pointercancel', endPointer);
+
+  stage.addEventListener('dblclick', () => { fitView(); });
+
+  $('zoomIn').addEventListener('click', () => zoomCenter(1.5));
+  $('zoomOut').addEventListener('click', () => zoomCenter(1 / 1.5));
+  $('fit').addEventListener('click', fitView);
+  $('actual').addEventListener('click', actualSize);
+
+  new ResizeObserver(() => { if (fitted) fitView(); else applyView(); }).observe(stage);
 
   /* ---------- Auto-Wechsel ---------- */
 
   function startAuto() {
     if (items.length < 2) return;
     stopAuto();
-    timer = setInterval(() => show(current + 1), +intervalEl.value);
+    timer = setInterval(toggleTop, +intervalEl.value);
     autoBtn.setAttribute('aria-pressed', 'true');
   }
   function stopAuto() {
@@ -387,38 +554,45 @@
     timer = null;
     autoBtn.setAttribute('aria-pressed', 'false');
   }
-  function toggleAuto() { timer ? stopAuto() : startAuto(); }
+  const toggleAuto = () => (timer ? stopAuto() : startAuto());
 
   autoBtn.addEventListener('click', toggleAuto);
+  toggleBtn.addEventListener('click', () => { stopAuto(); toggleTop(); });
   intervalEl.addEventListener('input', () => {
     intervalVal.textContent = intervalEl.value + ' ms';
     if (timer) startAuto();
   });
   $('clear').addEventListener('click', clearAll);
 
-  /* ---------- Eingaben ---------- */
-
-  stage.addEventListener('click', () => { stopAuto(); show(current + 1); });
+  /* ---------- Tastatur ---------- */
 
   document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.target.matches('input[type=range]')) return;
-    if (e.target.closest('button, .thumb') && (e.key === ' ' || e.key === 'Enter')) return;
+    if (e.target.closest('button') && (e.key === ' ' || e.key === 'Enter')) return;
     if (!items.length) return;
-    if (e.key === ' ') { e.preventDefault(); stopAuto(); show(current + 1); }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); stopAuto(); show(current + 1); }
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); stopAuto(); show(current - 1); }
-    else if (/^[1-9]$/.test(e.key) && +e.key <= items.length) { stopAuto(); show(+e.key - 1); }
-    else if (e.key.toLowerCase() === 'f') toggleAuto();
+    const k = e.key;
+    if (k === ' ') { e.preventDefault(); stopAuto(); toggleTop(); }
+    else if (/^[1-9]$/.test(k)) { if (+k <= items.length) { stopAuto(); toggleItem(+k - 1); } }
+    else if (k.toLowerCase() === 'f') toggleAuto();
+    else if (k === '+' || k === '=') zoomCenter(1.5);
+    else if (k === '-') zoomCenter(1 / 1.5);
+    else if (k === '0') fitView();
   });
+
+  /* ---------- Dateien ---------- */
 
   $('file').addEventListener('change', (e) => { addFiles(e.target.files); e.target.value = ''; });
 
-  // Drag & Drop auf das gesamte Fenster
   let dragDepth = 0;
   const hasFiles = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
   window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; overlay.classList.add('show'); });
   window.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
-  window.addEventListener('dragleave', (e) => { if (!hasFiles(e)) return; dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) overlay.classList.remove('show'); });
+  window.addEventListener('dragleave', (e) => {
+    if (!hasFiles(e)) return;
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (!dragDepth) overlay.classList.remove('show');
+  });
   window.addEventListener('drop', (e) => {
     if (!hasFiles(e)) return;
     e.preventDefault();
@@ -426,10 +600,7 @@
     addFiles(e.dataTransfer.files);
   });
 
-  window.addEventListener('resize', fitStage);
-  new ResizeObserver(fitStage).observe($('stageWrap'));
-
-  render();
+  rebuild();
 })();
 </script>
 </body>
