@@ -55,14 +55,6 @@
   #zoomVal { min-width: 56px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
   .hint { width: 100%; color: var(--muted); font-size: 13px; }
 
-  #warnings { display: none; }
-  #warnings.show { display: block; }
-  .warn {
-    margin: 0; padding: 8px 16px;
-    background: #4a2e26; color: #ffd2c4;
-    border-bottom: 1px solid #6b3f33;
-  }
-
   main { flex: 1; min-height: 0; display: flex; position: relative; }
   #stageWrap { flex: 1; min-width: 0; position: relative; }
   #stage {
@@ -90,14 +82,17 @@
   #layer img.on { visibility: visible; }
   #layer.pixel img { image-rendering: pixelated; }
 
-  #badge {
+  #names {
     position: absolute; left: 12px; top: 12px;
-    background: rgba(0,0,0,.72); color: var(--text);
-    padding: 3px 10px; border-radius: 4px; font-size: 13px;
+    background: rgba(0,0,0,.72);
+    padding: 6px 12px; border-radius: 4px;
+    font-size: 13px; line-height: 1.6;
     pointer-events: none;
     max-width: calc(100% - 24px);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  #names div { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #names div.shown { color: var(--accent); font-weight: 600; }
+  #names div.off { color: var(--muted); text-decoration: line-through; }
 
   #empty {
     position: absolute; inset: 16px;
@@ -109,44 +104,6 @@
   }
   #empty strong { color: var(--text); font-size: 20px; font-weight: 600; }
 
-  aside {
-    width: 230px; flex: none;
-    background: var(--panel);
-    border-left: 1px solid var(--line);
-    overflow-y: auto;
-    padding: 10px;
-    display: flex; flex-direction: column; gap: 10px;
-  }
-  .thumb {
-    position: relative;
-    display: block; width: 100%;
-    padding: 6px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--bg);
-  }
-  .thumb.shown { border-color: var(--accent); }
-  .thumb.off img.pv { opacity: .35; }
-  .thumb img.pv {
-    display: block; width: 100%; height: 90px;
-    object-fit: contain; background: #000; border-radius: 3px;
-  }
-  .thumb .name { margin-top: 6px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .thumb .meta { font-size: 12px; color: var(--muted); }
-  .thumb .meta.bad { color: var(--warn); }
-  .thumb .tag { font-size: 12px; color: var(--accent); }
-  .thumb .eye {
-    position: absolute; top: 10px; left: 10px;
-    min-width: 34px; height: 24px; padding: 0 6px; font-size: 12px;
-    background: rgba(0,0,0,.72); border-radius: 4px;
-  }
-  .thumb.off .eye { color: var(--muted); text-decoration: line-through; }
-  .thumb .rm {
-    position: absolute; top: 10px; right: 10px;
-    width: 24px; height: 24px; padding: 0; line-height: 1;
-    background: rgba(0,0,0,.72); border-radius: 4px;
-  }
-
   #dropOverlay {
     position: fixed; inset: 0; display: none;
     background: rgba(232,179,57,.12);
@@ -157,11 +114,6 @@
   }
   #dropOverlay.show { display: flex; }
 
-  @media (max-width: 700px) {
-    main { flex-direction: column; }
-    aside { width: auto; max-height: 190px; flex-direction: row; border-left: 0; border-top: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; }
-    .thumb { width: 150px; flex: none; }
-  }
 </style>
 </head>
 <body>
@@ -191,21 +143,18 @@
   <span class="hint">Leertaste oder Klick = oberes Bild ein/aus · Mausrad = Zoom · Ziehen = Verschieben · Doppelklick = Einpassen · 1–9 = einzelnes Bild ein/aus · F = Vollbild</span>
 </header>
 
-<div id="warnings" role="alert"></div>
-
 <main>
   <div id="stageWrap">
     <div id="stage" tabindex="0" hidden aria-label="Bildvergleich">
       <div id="layer"></div>
-      <div id="badge"></div>
+      <div id="names"></div>
     </div>
     <div id="empty">
       <strong>Mindestens zwei Bilder hierher ziehen</strong>
       <span>JPG, PNG oder WebP, ähnliches Seitenverhältnis (Abweichung höchstens 2 Pixel)</span>
-      <span>Das größte Bild bestimmt die Anzeigegröße. Das zuletzt geladene Bild liegt oben.</span>
+      <span>Das größte Bild bestimmt die Anzeigegröße. Das zuerst genannte Bild liegt oben.</span>
     </div>
   </div>
-  <aside id="list" aria-label="Geladene Bilder"></aside>
 </main>
 
 <div id="dropOverlay">Bilder hier ablegen</div>
@@ -221,12 +170,12 @@
   const PIXEL_ZOOM = 3;                          // ab hier ohne Glättung zeichnen
 
   const $ = (id) => document.getElementById(id);
-  const stage = $('stage'), layer = $('layer'), badge = $('badge'), empty = $('empty');
-  const list = $('list'), warningsEl = $('warnings'), overlay = $('dropOverlay');
+  const stage = $('stage'), layer = $('layer'), empty = $('empty');
+  const names = $('names'), overlay = $('dropOverlay');
   const toggleBtn = $('toggleTop');
   const zoomVal = $('zoomVal');
 
-  /** Reihenfolge = Stapel: letztes Element liegt oben. */
+  /** Reihenfolge = Stapel: das erste Element liegt oben. */
   let items = [];   // {id,name,url,w,h,active,el}
   let nextId = 1;
   let notices = [];
@@ -288,23 +237,14 @@
 
   /* ---------- Analyse ---------- */
 
+  // Referenz = größtes Bild (nach Pixelfläche)
   const reference = () =>
     items.reduce((best, it) => (!best || it.w * it.h > best.w * best.h ? it : best), null);
 
-  // Bild auf Referenzgröße skaliert: Abweichung in Pixeln in der jeweils anderen Achse.
-  function deviationPx(it, r) {
-    const scaledH = r.w * it.h / it.w;
-    const scaledW = r.h * it.w / it.h;
-    return Math.max(Math.abs(scaledH - r.h), Math.abs(scaledW - r.w));
-  }
-
   /* ---------- Anzeige-Logik ---------- */
 
-  // Angezeigt wird das oberste aktive Bild im Stapel.
-  const shownIndex = () => {
-    for (let i = items.length - 1; i >= 0; i--) if (items[i].active) return i;
-    return -1;
-  };
+  // Angezeigt wird das oberste aktive Bild (erstes in der Liste).
+  const shownIndex = () => items.findIndex((it) => it.active);
 
   function toggleItem(i) {
     const it = items[i];
@@ -316,61 +256,27 @@
 
   function toggleTop() {
     if (items.length < 2) return;
-    toggleItem(items.length - 1);
+    toggleItem(0);
   }
 
   function updateDisplay() {
     const shown = shownIndex();
     items.forEach((it, i) => it.el && it.el.classList.toggle('on', i === shown));
-
-    [...list.children].forEach((node, i) => {
-      const it = items[i];
-      if (!it) return;
-      node.classList.toggle('shown', i === shown);
-      node.classList.toggle('off', !it.active);
-      const eye = node.querySelector('.eye');
-      eye.textContent = i < 9 ? `${i + 1}` : '•';
-      eye.setAttribute('aria-pressed', String(it.active));
-      eye.title = it.active ? 'Bild ausblenden' : 'Bild einblenden';
-      node.querySelector('.tag').textContent =
-        i === shown ? 'wird angezeigt' : it.active ? 'aktiv, verdeckt' : 'ausgeblendet';
+    [...names.children].forEach((row, i) => {
+      row.classList.toggle('shown', i === shown);
+      row.classList.toggle('off', !items[i].active);
     });
-
-    const topIt = items[items.length - 1];
     toggleBtn.disabled = items.length < 2;
-    toggleBtn.textContent = topIt && topIt.active ? 'Oberes Bild ausblenden' : 'Oberes Bild einblenden';
-
-    badge.textContent = shown >= 0 ? `${items[shown].name} (${shown + 1}/${items.length})` : '';
+    toggleBtn.textContent = items[0] && items[0].active ? 'Oberes Bild ausblenden' : 'Oberes Bild einblenden';
   }
 
   /* ---------- Aufbau ---------- */
 
   function rebuild() {
     ref = reference();
-    const hasItems = items.length > 0;
-    stage.hidden = !hasItems;
-    empty.style.display = hasItems ? 'none' : '';
+    stage.hidden = !items.length;
+    empty.style.display = items.length ? 'none' : '';
 
-    // Hinweise
-    const msgs = [...notices];
-    if (items.length === 1) msgs.push('Für einen Vergleich wird mindestens ein weiteres Bild benötigt.');
-    const dev = new Map();
-    if (ref) {
-      for (const it of items) {
-        const d = deviationPx(it, ref);
-        dev.set(it.id, d);
-        if (it !== ref && d > TOLERANCE_PX) {
-          msgs.push(`„${it.name}“ hat ein anderes Seitenverhältnis als „${ref.name}“ (Abweichung ca. ${d.toFixed(1)} px bei Referenzgröße). Der Vergleich ist nicht aussagekräftig.`);
-        }
-      }
-    }
-    warningsEl.className = msgs.length ? 'show' : '';
-    warningsEl.replaceChildren(...msgs.map((t) => {
-      const p = document.createElement('p');
-      p.className = 'warn'; p.textContent = t; return p;
-    }));
-
-    // Ebene mit Bildern in Referenzgröße
     layer.replaceChildren();
     if (ref) {
       layer.style.width = ref.w + 'px';
@@ -383,28 +289,11 @@
       });
     }
 
-    // Seitenleiste
-    list.replaceChildren();
-    items.forEach((it, i) => {
-      const bad = it !== ref && (dev.get(it.id) ?? 0) > TOLERANCE_PX;
-      const node = document.createElement('div');
-      node.className = 'thumb';
-      node.innerHTML = `
-        <img class="pv" alt="">
-        <button class="eye" type="button"></button>
-        <button class="rm" type="button" aria-label="Entfernen">×</button>
-        <div class="name"></div>
-        <div class="meta${bad ? ' bad' : ''}"></div>
-        <div class="tag"></div>`;
-      node.querySelector('.pv').src = it.url;
-      node.querySelector('.name').textContent = it.name;
-      node.querySelector('.meta').textContent =
-        `${it.w} × ${it.h}` + (it === ref ? ' · Referenz' : bad ? ' · Seitenverhältnis weicht ab' : '') +
-        (i === items.length - 1 && items.length > 1 ? ' · oben' : '');
-      node.querySelector('.eye').addEventListener('click', () => toggleItem(i));
-      node.querySelector('.rm').addEventListener('click', () => removeItem(it.id));
-      list.appendChild(node);
-    });
+    names.replaceChildren(...items.map((it, i) => {
+      const row = document.createElement('div');
+      row.textContent = `${i + 1}  ${it.name}`;
+      return row;
+    }));
 
     updateDisplay();
     if (ref) { if (fitted) fitView(); else applyView(); }
