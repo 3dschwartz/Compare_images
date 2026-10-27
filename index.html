@@ -53,7 +53,7 @@
   .ctl { display: flex; align-items: center; gap: 8px; color: var(--muted); }
   .ctl input[type=range] { accent-color: var(--accent); width: 110px; }
   #zoomVal { min-width: 56px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .hint { width: 100%; color: var(--muted); font-size: 13px; }
+  #hint { flex: none; padding: 6px 16px; color: var(--muted); font-size: 13px; background: var(--panel); border-top: 1px solid var(--line); }
 
   main { flex: 1; min-height: 0; display: flex; position: relative; }
   #stageWrap { flex: 1; min-width: 0; position: relative; }
@@ -85,14 +85,22 @@
   #names {
     position: absolute; left: 12px; top: 12px;
     background: rgba(0,0,0,.72);
-    padding: 6px 12px; border-radius: 4px;
+    padding: 6px 10px; border-radius: 4px;
     font-size: 13px; line-height: 1.6;
     pointer-events: none;
     max-width: calc(100% - 24px);
   }
-  #names div { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #names div.shown { color: var(--accent); font-weight: 600; }
-  #names div.off { color: var(--muted); text-decoration: line-through; }
+  #names .row { display: flex; align-items: center; gap: 6px; color: var(--text); }
+  #names .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #names .row.shown { color: var(--accent); font-weight: 600; }
+  #names .row.off .lbl { color: var(--muted); text-decoration: line-through; font-weight: 400; }
+  #names .mv {
+    pointer-events: auto;
+    border: 0; background: none; padding: 0 3px; border-radius: 3px;
+    font-size: 11px; line-height: 1.6; color: var(--muted);
+  }
+  #names .mv:hover { color: var(--text); }
+  #names .mv:disabled { opacity: .25; cursor: default; }
 
   #empty {
     position: absolute; inset: 16px;
@@ -128,6 +136,10 @@
 
   <span class="group">
     <button id="toggleTop" type="button" disabled>Oberes Bild ausblenden</button>
+    <label class="ctl">Transparenz
+      <input id="alpha" type="range" min="0" max="100" step="1" value="0">
+      <span id="alphaVal">0 %</span>
+    </label>
   </span>
   <span class="sep"></span>
 
@@ -140,7 +152,6 @@
     <button id="fullscreen" type="button" aria-pressed="false">Vollbild</button>
   </span>
 
-  <span class="hint">Leertaste oder Klick = oberes Bild ein/aus · Mausrad = Zoom · Ziehen = Verschieben · Doppelklick = Einpassen · 1–9 = einzelnes Bild ein/aus · F = Vollbild</span>
 </header>
 
 <main>
@@ -156,6 +167,8 @@
     </div>
   </div>
 </main>
+
+<footer id="hint">Leertaste oder Klick = oberes Bild ein/aus · Mausrad = Zoom · Ziehen = Verschieben · Doppelklick = Einpassen · 1–9 = einzelnes Bild ein/aus · F = Vollbild · ▲▼ in der Liste = Reihenfolge ändern · Regler = Transparenz des oberen Bildes</footer>
 
 <div id="dropOverlay">Bilder hier ablegen</div>
 
@@ -174,6 +187,7 @@
   const names = $('names'), overlay = $('dropOverlay');
   const toggleBtn = $('toggleTop');
   const zoomVal = $('zoomVal');
+  const alphaEl = $('alpha'), alphaVal = $('alphaVal');
 
   /** Reihenfolge = Stapel: das erste Element liegt oben. */
   let items = [];   // {id,name,url,w,h,active,el}
@@ -260,14 +274,59 @@
   }
 
   function updateDisplay() {
-    const shown = shownIndex();
-    items.forEach((it, i) => it.el && it.el.classList.toggle('on', i === shown));
+    const active = items.map((it, i) => i).filter((i) => items[i].active);
+    const top = active[0];
+    const under = active[1];                       // darunterliegendes aktives Bild
+    const t = alphaEl.value / 100;                 // Transparenz des oberen Bildes
+    const blend = under !== undefined && t > 0;
+
+    items.forEach((it, i) => {
+      if (!it.el) return;
+      it.el.style.zIndex = String(items.length - i);   // erstes Bild liegt oben
+      it.el.classList.toggle('on', i === top || (blend && i === under));
+      it.el.style.opacity = i === top && blend ? String(1 - t) : '1';
+    });
+
     [...names.children].forEach((row, i) => {
-      row.classList.toggle('shown', i === shown);
+      row.classList.toggle('shown', i === top);
       row.classList.toggle('off', !items[i].active);
     });
     toggleBtn.disabled = items.length < 2;
     toggleBtn.textContent = items[0] && items[0].active ? 'Oberes Bild ausblenden' : 'Oberes Bild einblenden';
+  }
+
+  function moveButton(txt, title, disabled, fn) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'mv'; b.textContent = txt;
+    b.title = title; b.setAttribute('aria-label', title); b.disabled = disabled;
+    b.addEventListener('pointerdown', (e) => e.stopPropagation());
+    b.addEventListener('dblclick', (e) => e.stopPropagation());
+    b.addEventListener('click', fn);
+    return b;
+  }
+
+  function moveItem(i, d) {
+    const j = i + d;
+    if (j < 0 || j >= items.length) return;
+    [items[i], items[j]] = [items[j], items[i]];
+    buildNames();
+    updateDisplay();
+  }
+
+  function buildNames() {
+    names.replaceChildren(...items.map((it, i) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const label = document.createElement('span');
+      label.className = 'lbl';
+      label.textContent = `${i + 1}  ${it.name}  (${it.w} × ${it.h} px)`;
+      row.append(
+        label,
+        moveButton('▲', 'Nach oben', i === 0, () => moveItem(i, -1)),
+        moveButton('▼', 'Nach unten', i === items.length - 1, () => moveItem(i, 1))
+      );
+      return row;
+    }));
   }
 
   /* ---------- Aufbau ---------- */
@@ -289,11 +348,7 @@
       });
     }
 
-    names.replaceChildren(...items.map((it, i) => {
-      const row = document.createElement('div');
-      row.textContent = `${i + 1}  ${it.name}`;
-      return row;
-    }));
+    buildNames();
 
     updateDisplay();
     if (ref) { if (fitted) fitView(); else applyView(); }
@@ -427,6 +482,10 @@
   /* ---------- Buttons ---------- */
 
   toggleBtn.addEventListener('click', toggleTop);
+  alphaEl.addEventListener('input', () => {
+    alphaVal.textContent = alphaEl.value + ' %';
+    updateDisplay();
+  });
   $('clear').addEventListener('click', clearAll);
 
   /* ---------- Vollbild ---------- */
