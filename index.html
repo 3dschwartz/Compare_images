@@ -53,7 +53,7 @@
   .ctl { display: flex; align-items: center; gap: 8px; color: var(--muted); }
   .ctl input[type=range] { accent-color: var(--accent); width: 110px; }
   #zoomVal { min-width: 56px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
-  #hint { flex: none; padding: 6px 16px; color: var(--muted); font-size: 13px; background: var(--panel); border-top: 1px solid var(--line); }
+  #hint { flex: none; padding: 6px 16px; color: var(--muted); font-size: 13px; }
 
   main { flex: 1; min-height: 0; display: flex; position: relative; }
   #stageWrap { flex: 1; min-width: 0; position: relative; }
@@ -88,8 +88,9 @@
     font-size: 13px; line-height: 1.4;
     text-shadow: 0 0 3px #000, 0 1px 2px #000;
     pointer-events: none;
-    max-width: calc(100% - 28px);
+    width: max-content; max-width: calc(100% - 8px);
   }
+  #names .num, #names .lbl { pointer-events: auto; cursor: move; touch-action: none; }
   #names .row { display: flex; align-items: center; gap: 8px; color: var(--text); }
   #names .num { min-width: 1.2em; text-align: right; }
   #names .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -176,7 +177,7 @@
   </div>
 </main>
 
-<footer id="hint">Leertaste oder Klick = oberes Bild ein/aus · Mausrad = Zoom · Ziehen = Verschieben · Doppelklick = Einpassen · 1–9 = einzelnes Bild ein/aus · F = Vollbild · ▲▼ in der Liste = Reihenfolge ändern · Regler = Transparenz des oberen Bildes</footer>
+<footer id="hint">Leertaste oder Klick = oberes Bild ein/aus · Mausrad = Zoom · Ziehen = Verschieben · Doppelklick = Einpassen · 1–9 = einzelnes Bild ein/aus · F = Vollbild · ▲▼ in der Liste = Reihenfolge ändern · Regler = Transparenz des oberen Bildes · Dateiliste mit der Maus verschiebbar</footer>
 
 <div id="dropOverlay">Bilder hier ablegen</div>
 
@@ -292,7 +293,7 @@
       if (!it.el) return;
       it.el.style.zIndex = String(items.length - i);   // erstes Bild liegt oben
       it.el.classList.toggle('on', i === top || (blend && i === under));
-      it.el.style.opacity = i === top && blend ? String(1 - t) : '1';
+      it.el.style.opacity = i === top ? String(1 - t) : '1';
     });
 
     [...names.children].forEach((row, i) => {
@@ -343,13 +344,40 @@
       row.append(
         num,
         iconButton('eye', EYE_SVG, 'Bild ein-/ausblenden', false, () => toggleItem(i)),
-        label,
         iconButton('mv', '▲', 'Nach oben', i === 0, () => moveItem(i, -1)),
-        iconButton('mv', '▼', 'Nach unten', i === items.length - 1, () => moveItem(i, 1))
+        iconButton('mv', '▼', 'Nach unten', i === items.length - 1, () => moveItem(i, 1)),
+        label
       );
       return row;
     }));
   }
+
+  /* ---------- Dateiliste verschieben ---------- */
+
+  let nameDrag = null;
+  function clampNames() {
+    if (!stage.clientWidth || !stage.clientHeight) return;   // Bühne ausgeblendet
+    const maxL = Math.max(0, stage.clientWidth - names.offsetWidth - 4);
+    const maxT = Math.max(0, stage.clientHeight - names.offsetHeight - 4);
+    names.style.left = Math.min(maxL, Math.max(0, names.offsetLeft)) + 'px';
+    names.style.top = Math.min(maxT, Math.max(0, names.offsetTop)) + 'px';
+  }
+  names.addEventListener('pointerdown', (e) => {
+    const grip = e.target.closest('.num, .lbl');
+    if (!grip || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    e.stopPropagation();
+    grip.setPointerCapture(e.pointerId);
+    nameDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, left: names.offsetLeft, top: names.offsetTop };
+  });
+  names.addEventListener('pointermove', (e) => {
+    if (!nameDrag || e.pointerId !== nameDrag.id) return;
+    names.style.left = (nameDrag.left + e.clientX - nameDrag.x) + 'px';
+    names.style.top = (nameDrag.top + e.clientY - nameDrag.y) + 'px';
+    clampNames();
+  });
+  const endNameDrag = (e) => { if (nameDrag && e.pointerId === nameDrag.id) nameDrag = null; };
+  names.addEventListener('pointerup', endNameDrag);
+  names.addEventListener('pointercancel', endNameDrag);
 
   /* ---------- Aufbau ---------- */
 
@@ -499,7 +527,7 @@
   $('fit').addEventListener('click', fitView);
   $('actual').addEventListener('click', actualSize);
 
-  new ResizeObserver(() => { if (fitted) fitView(); else applyView(); }).observe(stage);
+  new ResizeObserver(() => { if (fitted) fitView(); else applyView(); clampNames(); }).observe(stage);
 
   /* ---------- Buttons ---------- */
 
