@@ -83,23 +83,31 @@
   #layer.pixel img { image-rendering: pixelated; }
 
   #names {
-    position: absolute; left: 12px; top: 12px;
-    background: rgba(0,0,0,.72);
-    padding: 6px 10px; border-radius: 4px;
-    font-size: 13px; line-height: 1.6;
+    position: absolute; left: 14px; top: 12px;
+    display: flex; flex-direction: column; gap: 10px;
+    font-size: 13px; line-height: 1.4;
+    text-shadow: 0 0 3px #000, 0 1px 2px #000;
     pointer-events: none;
-    max-width: calc(100% - 24px);
+    max-width: calc(100% - 28px);
   }
-  #names .row { display: flex; align-items: center; gap: 6px; color: var(--text); }
+  #names .row { display: flex; align-items: center; gap: 8px; color: var(--text); }
+  #names .num { min-width: 1.2em; text-align: right; }
   #names .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #names .row.shown { color: var(--accent); font-weight: 600; }
-  #names .row.off .lbl { color: var(--muted); text-decoration: line-through; font-weight: 400; }
-  #names .mv {
+  #names .row.off { color: var(--muted); }
+  #names .row.off .lbl { text-decoration: line-through; font-weight: 400; }
+  #names button {
     pointer-events: auto;
-    border: 0; background: none; padding: 0 3px; border-radius: 3px;
-    font-size: 11px; line-height: 1.6; color: var(--muted);
+    border: 0; background: none; border-radius: 3px;
+    color: inherit; text-shadow: inherit;
+    display: inline-flex; align-items: center; justify-content: center;
   }
-  #names .mv:hover { color: var(--text); }
+  #names .eye { padding: 1px 2px; }
+  #names .eye svg { width: 18px; height: 18px; display: block; filter: drop-shadow(0 0 2px #000); }
+  #names .eye .slash { display: none; }
+  #names .row.off .eye .slash { display: inline; }
+  #names .mv { padding: 0 3px; font-size: 11px; color: var(--muted); }
+  #names .mv:hover, #names .eye:hover { color: var(--text); }
   #names .mv:disabled { opacity: .25; cursor: default; }
 
   #empty {
@@ -290,20 +298,29 @@
     [...names.children].forEach((row, i) => {
       row.classList.toggle('shown', i === top);
       row.classList.toggle('off', !items[i].active);
+      const eye = row.querySelector('.eye');
+      eye.setAttribute('aria-pressed', String(items[i].active));
+      eye.title = items[i].active ? 'Bild ausblenden' : 'Bild einblenden';
     });
     toggleBtn.disabled = items.length < 2;
     toggleBtn.textContent = items[0] && items[0].active ? 'Oberes Bild ausblenden' : 'Oberes Bild einblenden';
   }
 
-  function moveButton(txt, title, disabled, fn) {
+  function iconButton(cls, html, title, disabled, fn) {
     const b = document.createElement('button');
-    b.type = 'button'; b.className = 'mv'; b.textContent = txt;
+    b.type = 'button'; b.className = cls; b.innerHTML = html;
     b.title = title; b.setAttribute('aria-label', title); b.disabled = disabled;
     b.addEventListener('pointerdown', (e) => e.stopPropagation());
     b.addEventListener('dblclick', (e) => e.stopPropagation());
     b.addEventListener('click', fn);
     return b;
   }
+
+  const EYE_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>' +
+    '<path class="slash" d="M3 3l18 18"/></svg>';
 
   function moveItem(i, d) {
     const j = i + d;
@@ -317,13 +334,18 @@
     names.replaceChildren(...items.map((it, i) => {
       const row = document.createElement('div');
       row.className = 'row';
+      const num = document.createElement('span');
+      num.className = 'num';
+      num.textContent = String(i + 1);
       const label = document.createElement('span');
       label.className = 'lbl';
-      label.textContent = `${i + 1}  ${it.name}  (${it.w} × ${it.h} px)`;
+      label.textContent = `${it.name}  (${it.w} × ${it.h} px)`;
       row.append(
+        num,
+        iconButton('eye', EYE_SVG, 'Bild ein-/ausblenden', false, () => toggleItem(i)),
         label,
-        moveButton('▲', 'Nach oben', i === 0, () => moveItem(i, -1)),
-        moveButton('▼', 'Nach unten', i === items.length - 1, () => moveItem(i, 1))
+        iconButton('mv', '▲', 'Nach oben', i === 0, () => moveItem(i, -1)),
+        iconButton('mv', '▼', 'Nach unten', i === items.length - 1, () => moveItem(i, 1))
       );
       return row;
     }));
