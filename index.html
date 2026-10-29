@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bildvergleich</title>
+<title>Image Compare</title>
 <style>
   :root {
     --bg: #2a2a2c;
@@ -13,7 +13,6 @@
     --text: #ececea;
     --muted: #a3a3a8;
     --accent: #e8b339;
-    --warn: #ff8a65;
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
@@ -46,13 +45,12 @@
   button:hover, label.btn:hover { border-color: var(--muted); }
   button:disabled { opacity: .4; cursor: default; }
   button:disabled:hover { border-color: var(--line); }
-  button:focus-visible, label.btn:focus-within, .thumb:focus-visible, #stage:focus-visible {
+  button:focus-visible, label.btn:focus-within, #stage:focus-visible, #names input:focus-visible {
     outline: 2px solid var(--accent); outline-offset: 2px;
   }
   button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
-  .ctl { display: flex; align-items: center; gap: 8px; color: var(--muted); }
-  .ctl input[type=range] { accent-color: var(--accent); width: 110px; }
   #zoomVal { min-width: 56px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+
   #hint { flex: none; padding: 6px 16px; color: var(--muted); font-size: 13px; }
 
   main { flex: 1; min-height: 0; display: flex; position: relative; }
@@ -82,21 +80,25 @@
   #layer img.on { visibility: visible; }
   #layer.pixel img { image-rendering: pixelated; }
 
+  /* File list (fixed position, rows can be reordered) */
   #names {
     position: absolute; left: 14px; top: 12px;
     display: flex; flex-direction: column; gap: 10px;
     font-size: 13px; line-height: 1.4;
     text-shadow: 0 0 3px #000, 0 1px 2px #000;
     pointer-events: none;
-    width: max-content; max-width: calc(100% - 8px);
+    width: max-content; max-width: calc(100% - 28px);
   }
-  #names .num, #names .lbl { pointer-events: auto; cursor: move; touch-action: none; }
-  #names .row { display: flex; align-items: center; gap: 8px; color: var(--text); }
+  #names .row { position: relative; display: flex; align-items: center; gap: 8px; color: var(--text); }
   #names .num { min-width: 1.2em; text-align: right; }
+  #names .num, #names .lbl { pointer-events: auto; cursor: grab; touch-action: none; }
   #names .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #names .row.shown { color: var(--accent); font-weight: 600; }
-  #names .row.off { color: var(--muted); }
-  #names .row.off .lbl { text-decoration: line-through; font-weight: 400; }
+  #names .row.ins-before::before, #names .row.ins-after::after {
+    content: ""; position: absolute; left: 0; right: 0; height: 2px;
+    background: var(--text); pointer-events: none;
+  }
+  #names .row.ins-before::before { top: -6px; }
+  #names .row.ins-after::after { bottom: -6px; }
   #names button {
     pointer-events: auto;
     border: 0; background: none; border-radius: 3px;
@@ -110,6 +112,7 @@
   #names .mv { padding: 0 3px; font-size: 11px; color: var(--muted); }
   #names .mv:hover, #names .eye:hover { color: var(--text); }
   #names .mv:disabled { opacity: .25; cursor: default; }
+  #names .alpha { pointer-events: auto; width: 80px; height: 14px; margin: 0; accent-color: var(--accent); }
 
   #empty {
     position: absolute; inset: 16px;
@@ -130,86 +133,70 @@
     z-index: 10; pointer-events: none;
   }
   #dropOverlay.show { display: flex; }
-
 </style>
 </head>
 <body>
 
 <header>
-  <h1>Bildvergleich</h1>
-  <label class="btn">Bilder wählen
+  <h1>Image Compare</h1>
+  <label class="btn">Upload
     <input id="file" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple hidden>
   </label>
-  <button id="clear" type="button">Alle entfernen</button>
+  <button id="clear" type="button">Clear all</button>
   <span class="sep"></span>
 
   <span class="group">
-    <button id="toggleTop" type="button" disabled>Oberes Bild ausblenden</button>
-    <label class="ctl">Transparenz
-      <input id="alpha" type="range" min="0" max="100" step="1" value="0">
-      <span id="alphaVal">0 %</span>
-    </label>
-  </span>
-  <span class="sep"></span>
-
-  <span class="group">
-    <button id="zoomOut" type="button" aria-label="Verkleinern">−</button>
+    <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
     <span id="zoomVal">100 %</span>
-    <button id="zoomIn" type="button" aria-label="Vergrößern">+</button>
-    <button id="fit" type="button">Einpassen</button>
+    <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
+    <button id="fit" type="button">Fit</button>
     <button id="actual" type="button">100 %</button>
-    <button id="fullscreen" type="button" aria-pressed="false">Vollbild</button>
+    <button id="fullscreen" type="button" aria-pressed="false">Fullscreen</button>
   </span>
-
 </header>
 
 <main>
   <div id="stageWrap">
-    <div id="stage" tabindex="0" hidden aria-label="Bildvergleich">
+    <div id="stage" tabindex="0" hidden aria-label="Image comparison">
       <div id="layer"></div>
       <div id="names"></div>
     </div>
     <div id="empty">
-      <strong>Mindestens zwei Bilder hierher ziehen</strong>
-      <span>JPG, PNG oder WebP, ähnliches Seitenverhältnis (Abweichung höchstens 2 Pixel)</span>
-      <span>Das größte Bild bestimmt die Anzeigegröße. Das zuerst genannte Bild liegt oben.</span>
+      <strong>Drop at least two images here</strong>
+      <span>JPG, PNG or WebP with a similar aspect ratio</span>
+      <span>The largest image sets the display size. The first image in the list is on top.</span>
     </div>
   </div>
 </main>
 
-<footer id="hint">Leertaste oder Klick = oberes Bild ein/aus · Mausrad = Zoom · Ziehen = Verschieben · Doppelklick = Einpassen · 1–9 = einzelnes Bild ein/aus · F = Vollbild · ▲▼ in der Liste = Reihenfolge ändern · Regler = Transparenz des oberen Bildes · Dateiliste mit der Maus verschiebbar</footer>
+<footer id="hint">Space or click = toggle top image · Mouse wheel = zoom · Drag = pan · Double-click = fit · 1–9 = toggle image · F = fullscreen · Drag a row in the list or use ▲▼ to change the stack order</footer>
 
-<div id="dropOverlay">Bilder hier ablegen</div>
+<div id="dropOverlay">Drop images here</div>
 
 <script>
 (() => {
   'use strict';
 
-  const TOLERANCE_PX = 2;                        // erlaubte Abweichung in Pixeln
   const ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
   const ALLOWED_EXT = /\.(jpe?g|png|webp)$/i;
-  const MAX_ZOOM = 32;                           // Bildschirmpixel pro Bildpixel
-  const PIXEL_ZOOM = 3;                          // ab hier ohne Glättung zeichnen
+  const MAX_ZOOM = 32;                           // screen pixels per image pixel
+  const PIXEL_ZOOM = 3;                          // from here on, draw without smoothing
 
   const $ = (id) => document.getElementById(id);
   const stage = $('stage'), layer = $('layer'), empty = $('empty');
   const names = $('names'), overlay = $('dropOverlay');
-  const toggleBtn = $('toggleTop');
   const zoomVal = $('zoomVal');
-  const alphaEl = $('alpha'), alphaVal = $('alphaVal');
 
-  /** Reihenfolge = Stapel: das erste Element liegt oben. */
-  let items = [];   // {id,name,url,w,h,active,el}
+  /** Stack order = list order: the first item is on top. */
+  let items = [];   // {id,name,url,w,h,active,alpha,el}
   let nextId = 1;
-  let notices = [];
-  let ref = null;   // Referenzbild (größtes)
-  let timer = null;
+  let ref = null;   // reference image (largest)
 
-  // Ansicht
+  // view
   let s = 1, tx = 0, ty = 0;
   let fitted = true;
 
-  /* ---------- Laden ---------- */
+  /* ---------- Loading ---------- */
 
   const isAllowed = (f) => ALLOWED.includes(f.type) || ALLOWED_EXT.test(f.name);
 
@@ -219,7 +206,7 @@
       const img = new Image();
       img.onload = () => resolve({
         id: nextId++, name: file.name, url,
-        w: img.naturalWidth, h: img.naturalHeight, active: true, el: null
+        w: img.naturalWidth, h: img.naturalHeight, active: true, alpha: 0, el: null
       });
       img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(file.name)); };
       img.src = url;
@@ -227,52 +214,30 @@
   }
 
   async function addFiles(fileList) {
-    const files = [...fileList];
-    notices = [];
-    const valid = files.filter((f) => {
-      if (isAllowed(f)) return true;
-      notices.push(`„${f.name}“ wurde ignoriert: nur JPG, PNG und WebP sind erlaubt.`);
-      return false;
-    });
+    const valid = [...fileList].filter(isAllowed);
     const results = await Promise.allSettled(valid.map(loadImage));
-    results.forEach((r, i) => {
-      if (r.status === 'fulfilled') items.push(r.value);
-      else notices.push(`„${valid[i].name}“ konnte nicht geladen werden.`);
-    });
-    rebuild();
-  }
-
-  function removeItem(id) {
-    const i = items.findIndex((it) => it.id === id);
-    if (i < 0) return;
-    URL.revokeObjectURL(items[i].url);
-    items.splice(i, 1);
-    notices = [];
-    if (items.length && !items.some((it) => it.active)) items[items.length - 1].active = true;
+    results.forEach((r) => { if (r.status === 'fulfilled') items.push(r.value); });
     rebuild();
   }
 
   function clearAll() {
     items.forEach((it) => URL.revokeObjectURL(it.url));
-    items = []; notices = [];
+    items = [];
     rebuild();
   }
 
-  /* ---------- Analyse ---------- */
+  /* ---------- Reference ---------- */
 
-  // Referenz = größtes Bild (nach Pixelfläche)
+  // The largest image (by pixel area) defines the display size.
   const reference = () =>
     items.reduce((best, it) => (!best || it.w * it.h > best.w * best.h ? it : best), null);
 
-  /* ---------- Anzeige-Logik ---------- */
-
-  // Angezeigt wird das oberste aktive Bild (erstes in der Liste).
-  const shownIndex = () => items.findIndex((it) => it.active);
+  /* ---------- Display logic ---------- */
 
   function toggleItem(i) {
     const it = items[i];
     if (!it) return;
-    if (it.active && items.filter((x) => x.active).length === 1) return; // eins bleibt immer an
+    if (it.active && items.filter((x) => x.active).length === 1) return; // keep at least one on
     it.active = !it.active;
     updateDisplay();
   }
@@ -283,28 +248,20 @@
   }
 
   function updateDisplay() {
-    const active = items.map((it, i) => i).filter((i) => items[i].active);
-    const top = active[0];
-    const under = active[1];                       // darunterliegendes aktives Bild
-    const t = alphaEl.value / 100;                 // Transparenz des oberen Bildes
-    const blend = under !== undefined && t > 0;
-
     items.forEach((it, i) => {
       if (!it.el) return;
-      it.el.style.zIndex = String(items.length - i);   // erstes Bild liegt oben
-      it.el.classList.toggle('on', i === top || (blend && i === under));
-      it.el.style.opacity = i === top ? String(1 - t) : '1';
+      it.el.style.zIndex = String(items.length - i);      // first item on top
+      it.el.style.opacity = String(1 - it.alpha / 100);   // per-image transparency
+      it.el.classList.toggle('on', it.active);
     });
-
     [...names.children].forEach((row, i) => {
-      row.classList.toggle('shown', i === top);
-      row.classList.toggle('off', !items[i].active);
+      const it = items[i];
+      if (!it) return;
+      row.classList.toggle('off', !it.active);
       const eye = row.querySelector('.eye');
-      eye.setAttribute('aria-pressed', String(items[i].active));
-      eye.title = items[i].active ? 'Bild ausblenden' : 'Bild einblenden';
+      eye.setAttribute('aria-pressed', String(it.active));
+      eye.title = it.active ? 'Hide image' : 'Show image';
     });
-    toggleBtn.disabled = items.length < 2;
-    toggleBtn.textContent = items[0] && items[0].active ? 'Oberes Bild ausblenden' : 'Oberes Bild einblenden';
   }
 
   function iconButton(cls, html, title, disabled, fn) {
@@ -313,7 +270,7 @@
     b.title = title; b.setAttribute('aria-label', title); b.disabled = disabled;
     b.addEventListener('pointerdown', (e) => e.stopPropagation());
     b.addEventListener('dblclick', (e) => e.stopPropagation());
-    b.addEventListener('click', fn);
+    b.addEventListener('click', (e) => { fn(); if (e.detail > 0) b.blur(); });
     return b;
   }
 
@@ -335,51 +292,114 @@
     names.replaceChildren(...items.map((it, i) => {
       const row = document.createElement('div');
       row.className = 'row';
+
       const num = document.createElement('span');
       num.className = 'num';
       num.textContent = String(i + 1);
+
+      const slider = document.createElement('input');
+      slider.type = 'range'; slider.className = 'alpha';
+      slider.min = '0'; slider.max = '100'; slider.step = '1';
+      slider.value = String(it.alpha);
+      slider.title = `Transparency: ${it.alpha} %`;
+      slider.setAttribute('aria-label', `Transparency of ${it.name}`);
+      slider.addEventListener('pointerdown', (e) => e.stopPropagation());
+      slider.addEventListener('dblclick', (e) => e.stopPropagation());
+      slider.addEventListener('input', () => {
+        it.alpha = +slider.value;
+        slider.title = `Transparency: ${it.alpha} %`;
+        updateDisplay();
+      });
+
       const label = document.createElement('span');
       label.className = 'lbl';
       label.textContent = `${it.name}  (${it.w} × ${it.h} px)`;
+
       row.append(
         num,
-        iconButton('eye', EYE_SVG, 'Bild ein-/ausblenden', false, () => toggleItem(i)),
-        iconButton('mv', '▲', 'Nach oben', i === 0, () => moveItem(i, -1)),
-        iconButton('mv', '▼', 'Nach unten', i === items.length - 1, () => moveItem(i, 1)),
+        iconButton('eye', EYE_SVG, 'Hide image', false, () => toggleItem(i)),
+        iconButton('mv', '▲', 'Move up', i === 0, () => moveItem(i, -1)),
+        iconButton('mv', '▼', 'Move down', i === items.length - 1, () => moveItem(i, 1)),
+        slider,
         label
       );
       return row;
     }));
   }
 
-  /* ---------- Dateiliste verschieben ---------- */
+  /* ---------- Reorder by dragging rows ---------- */
 
-  let nameDrag = null;
-  function clampNames() {
-    if (!stage.clientWidth || !stage.clientHeight) return;   // Bühne ausgeblendet
-    const maxL = Math.max(0, stage.clientWidth - names.offsetWidth - 4);
-    const maxT = Math.max(0, stage.clientHeight - names.offsetHeight - 4);
-    names.style.left = Math.min(maxL, Math.max(0, names.offsetLeft)) + 'px';
-    names.style.top = Math.min(maxT, Math.max(0, names.offsetTop)) + 'px';
-  }
+  let dragFrom = null, dropPos = null;
+
+  const rowsOf = () => [...names.children];
+  const clearMarks = () => rowsOf().forEach((r) => r.classList.remove('ins-before', 'ins-after'));
+  const resetDraggable = () => rowsOf().forEach((r) => { r.draggable = false; });
+
+  // Only the number and the file name act as drag handles,
+  // so the sliders and buttons keep working normally.
   names.addEventListener('pointerdown', (e) => {
     const grip = e.target.closest('.num, .lbl');
-    if (!grip || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    if (!grip) return;
     e.stopPropagation();
-    grip.setPointerCapture(e.pointerId);
-    nameDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, left: names.offsetLeft, top: names.offsetTop };
+    grip.closest('.row').draggable = true;
   });
-  names.addEventListener('pointermove', (e) => {
-    if (!nameDrag || e.pointerId !== nameDrag.id) return;
-    names.style.left = (nameDrag.left + e.clientX - nameDrag.x) + 'px';
-    names.style.top = (nameDrag.top + e.clientY - nameDrag.y) + 'px';
-    clampNames();
-  });
-  const endNameDrag = (e) => { if (nameDrag && e.pointerId === nameDrag.id) nameDrag = null; };
-  names.addEventListener('pointerup', endNameDrag);
-  names.addEventListener('pointercancel', endNameDrag);
+  names.addEventListener('pointerup', resetDraggable);
 
-  /* ---------- Aufbau ---------- */
+  names.addEventListener('dragstart', (e) => {
+    const row = e.target.closest && e.target.closest('.row');
+    if (!row) return;
+    dragFrom = rowsOf().indexOf(row);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(dragFrom));
+  });
+
+  function updateDrop(e) {
+    const rows = rowsOf();
+    const nr = names.getBoundingClientRect();
+    const inside = e.clientX >= nr.left - 40 && e.clientX <= nr.right + 40 &&
+                   e.clientY >= nr.top - 30 && e.clientY <= nr.bottom + 30;
+    clearMarks();
+    if (!inside || !rows.length) { dropPos = null; return; }
+    dropPos = rows.length;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i].getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) { dropPos = i; break; }
+    }
+    if (dropPos < rows.length) rows[dropPos].classList.add('ins-before');
+    else rows[rows.length - 1].classList.add('ins-after');
+  }
+
+  function commitDrop() {
+    const from = dragFrom;
+    let to = dropPos;
+    dragFrom = null; dropPos = null;
+    clearMarks(); resetDraggable();
+    if (from === null || to === null) return;
+    if (to > from) to--;
+    if (to === from) return;
+    const [it] = items.splice(from, 1);
+    items.splice(to, 0, it);
+    buildNames();
+    updateDisplay();
+  }
+
+  window.addEventListener('dragover', (e) => {
+    if (dragFrom === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    updateDrop(e);
+  });
+  window.addEventListener('drop', (e) => {
+    if (dragFrom === null) return;
+    e.preventDefault();
+    commitDrop();
+  });
+  window.addEventListener('dragend', () => {
+    dragFrom = null; dropPos = null;
+    clearMarks(); resetDraggable();
+  });
+
+  /* ---------- Build ---------- */
 
   function rebuild() {
     ref = reference();
@@ -399,12 +419,11 @@
     }
 
     buildNames();
-
     updateDisplay();
     if (ref) { if (fitted) fitView(); else applyView(); }
   }
 
-  /* ---------- Zoom & Verschieben ---------- */
+  /* ---------- Zoom & pan ---------- */
 
   const viewport = () => ({ w: stage.clientWidth, h: stage.clientHeight });
 
@@ -428,7 +447,7 @@
     if (!ref) return;
     const v = viewport();
     const cw = ref.w * s, ch = ref.h * s;
-    const margin = 60; // mindestens so viel vom Bild bleibt sichtbar
+    const margin = 60; // at least this much of the image stays visible
     tx = Math.min(v.w - margin, Math.max(margin - cw, tx));
     ty = Math.min(v.h - margin, Math.max(margin - ch, ty));
   }
@@ -472,7 +491,7 @@
     zoomAt(p.x, p.y, s * Math.exp(-e.deltaY * unit * 0.0015));
   }, { passive: false });
 
-  // Zeiger: ein Finger/Maus = verschieben, zwei Finger = Pinch-Zoom
+  // Pointers: one finger/mouse = pan, two fingers = pinch zoom
   const pointers = new Map();
   let moved = 0, pinchDist = 0, wasMulti = false;
 
@@ -512,33 +531,25 @@
     pointers.delete(e.pointerId);
     if (pointers.size === 0) {
       stage.classList.remove('drag');
-      // Klick ohne Verschieben = oberes Bild ein/aus
-      if (e.type === 'pointerup' && moved <= 4 && !wasMulti) { toggleTop(); }
+      // click without moving = toggle top image
+      if (e.type === 'pointerup' && moved <= 4 && !wasMulti) toggleTop();
     }
     pinchDist = 0;
   }
   stage.addEventListener('pointerup', endPointer);
   stage.addEventListener('pointercancel', endPointer);
 
-  stage.addEventListener('dblclick', () => { fitView(); });
+  stage.addEventListener('dblclick', fitView);
 
   $('zoomIn').addEventListener('click', () => zoomCenter(1.5));
   $('zoomOut').addEventListener('click', () => zoomCenter(1 / 1.5));
   $('fit').addEventListener('click', fitView);
   $('actual').addEventListener('click', actualSize);
-
-  new ResizeObserver(() => { if (fitted) fitView(); else applyView(); clampNames(); }).observe(stage);
-
-  /* ---------- Buttons ---------- */
-
-  toggleBtn.addEventListener('click', toggleTop);
-  alphaEl.addEventListener('input', () => {
-    alphaVal.textContent = alphaEl.value + ' %';
-    updateDisplay();
-  });
   $('clear').addEventListener('click', clearAll);
 
-  /* ---------- Vollbild ---------- */
+  new ResizeObserver(() => { if (fitted) fitView(); else applyView(); }).observe(stage);
+
+  /* ---------- Fullscreen ---------- */
 
   const fsBtn = $('fullscreen');
   const root = document.documentElement;
@@ -556,7 +567,7 @@
   }
   function updateFsButton() {
     const on = !!fsElement();
-    fsBtn.textContent = on ? 'Vollbild beenden' : 'Vollbild';
+    fsBtn.textContent = on ? 'Exit fullscreen' : 'Fullscreen';
     fsBtn.setAttribute('aria-pressed', String(on));
   }
   if (!fsSupported) fsBtn.hidden = true;
@@ -564,11 +575,10 @@
   document.addEventListener('fullscreenchange', updateFsButton);
   document.addEventListener('webkitfullscreenchange', updateFsButton);
 
-  /* ---------- Tastatur ---------- */
+  /* ---------- Keyboard ---------- */
 
   document.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.target.matches('input[type=range]')) return;
     if (e.target.closest('button') && (e.key === ' ' || e.key === 'Enter')) return;
     const k = e.key;
     if (k.toLowerCase() === 'f') { toggleFullscreen(); return; }
@@ -580,7 +590,7 @@
     else if (k === '0') fitView();
   });
 
-  /* ---------- Dateien ---------- */
+  /* ---------- Files ---------- */
 
   $('file').addEventListener('change', (e) => { addFiles(e.target.files); e.target.value = ''; });
 
