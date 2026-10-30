@@ -6,13 +6,13 @@
 <title>Image Compare</title>
 <style>
   :root {
-    --bg: #2b2b2b;
+    --bg: #4a4a4a;                       /* the one and only gray */
     --stagebg: #4a4a4a;
-    --panel: #353535;
-    --line: #505050;
-    --text: #ececec;
-    --muted: #a6a6a6;
-    --accent: #e8b339;
+    --panel: #4a4a4a;
+    --line: rgba(255,255,255,.35);
+    --text: #ffffff;
+    --muted: rgba(255,255,255,.75);
+    --accent: #ffffff;
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
@@ -29,7 +29,6 @@
     display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;
     padding: 10px 16px;
     background: var(--panel);
-    border-bottom: 1px solid var(--line);
   }
   h1 { font-size: 16px; font-weight: 600; margin: 0 8px 0 0; }
   .group { display: flex; align-items: center; gap: 6px; }
@@ -48,7 +47,6 @@
   button:focus-visible, label.btn:focus-within, #stage:focus-visible, #names input:focus-visible {
     outline: 2px solid var(--accent); outline-offset: 2px;
   }
-  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
   #zoomVal { min-width: 56px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 
   #hint { flex: none; padding: 6px 16px; color: var(--muted); font-size: 13px; }
@@ -126,7 +124,7 @@
 
   #dropOverlay {
     position: fixed; inset: 0; display: none;
-    background: rgba(232,179,57,.12);
+    background: rgba(255,255,255,.12);
     border: 3px dashed var(--accent);
     align-items: center; justify-content: center;
     font-size: 22px; font-weight: 600;
