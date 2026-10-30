@@ -6,12 +6,12 @@
 <title>Image Compare</title>
 <style>
   :root {
-    --bg: #2a2a2c;
-    --stagebg: #1d1d1f;
-    --panel: #343437;
-    --line: #4a4a4f;
-    --text: #ececea;
-    --muted: #a3a3a8;
+    --bg: #2b2b2b;
+    --stagebg: #4a4a4a;
+    --panel: #353535;
+    --line: #505050;
+    --text: #ececec;
+    --muted: #a6a6a6;
     --accent: #e8b339;
     color-scheme: dark;
   }
@@ -68,7 +68,7 @@
     position: absolute; left: 0; top: 0;
     transform-origin: 0 0;
     will-change: transform;
-    box-shadow: 0 0 0 1px var(--line);
+    box-shadow: 0 0 0 1px rgba(0,0,0,.35);
   }
   #layer img {
     position: absolute; left: 0; top: 0;
@@ -105,12 +105,12 @@
     color: inherit; text-shadow: inherit;
     display: inline-flex; align-items: center; justify-content: center;
   }
-  #names .eye { padding: 1px 2px; }
-  #names .eye svg { width: 18px; height: 18px; display: block; filter: drop-shadow(0 0 2px #000); }
+  #names .eye, #names .trash { padding: 1px 2px; }
+  #names .eye svg, #names .trash svg { width: 18px; height: 18px; display: block; filter: drop-shadow(0 0 2px #000); }
   #names .eye .slash { display: none; }
   #names .row.off .eye .slash { display: inline; }
   #names .mv { padding: 0 3px; font-size: 11px; color: var(--muted); }
-  #names .mv:hover, #names .eye:hover { color: var(--text); }
+  #names .mv:hover, #names .eye:hover, #names .trash:hover { color: var(--text); }
   #names .mv:disabled { opacity: .25; cursor: default; }
   #names .alpha { pointer-events: auto; width: 80px; height: 14px; margin: 0; accent-color: var(--accent); }
 
@@ -220,6 +220,14 @@
     rebuild();
   }
 
+  function removeItem(i) {
+    const it = items[i];
+    if (!it) return;
+    URL.revokeObjectURL(it.url);
+    items.splice(i, 1);
+    rebuild();
+  }
+
   function clearAll() {
     items.forEach((it) => URL.revokeObjectURL(it.url));
     items = [];
@@ -237,13 +245,12 @@
   function toggleItem(i) {
     const it = items[i];
     if (!it) return;
-    if (it.active && items.filter((x) => x.active).length === 1) return; // keep at least one on
     it.active = !it.active;
     updateDisplay();
   }
 
   function toggleTop() {
-    if (items.length < 2) return;
+    if (!items.length) return;
     toggleItem(0);
   }
 
@@ -279,6 +286,12 @@
     'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>' +
     '<path class="slash" d="M3 3l18 18"/></svg>';
+
+  const TRASH_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>' +
+    '<path d="M10 11v6M14 11v6"/></svg>';
 
   function moveItem(i, d) {
     const j = i + d;
@@ -321,6 +334,7 @@
         iconButton('mv', '▲', 'Move up', i === 0, () => moveItem(i, -1)),
         iconButton('mv', '▼', 'Move down', i === items.length - 1, () => moveItem(i, 1)),
         slider,
+        iconButton('trash', TRASH_SVG, 'Remove image', false, () => removeItem(i)),
         label
       );
       return row;
